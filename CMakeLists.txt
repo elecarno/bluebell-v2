@@ -28,6 +28,7 @@ FetchContent_MakeAvailable(nfd)
 
 add_executable(bluebell-v2 
     main.c
+    includes/cJSON.c
 )
 
 target_compile_options(bluebell-v2 PUBLIC)

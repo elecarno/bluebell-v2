@@ -2,6 +2,9 @@
 #define CLAY_IMPLEMENTATION
 #include "includes/clay.h"
 #include "includes/clay_renderer_raylib.c"
+#include "includes/cJSON.h"
+
+#include <stdio.h>
 
 // GLOBALS -----------------------------------------------------------------------------------------
 const int FONT_ID_BODY_16 = 0;
@@ -33,6 +36,44 @@ Clay_RenderCommandArray layoutMain() {
     return renderCommands;
 }
 
+// JSON PARSER -------------------------------------------------------------------------------------
+cJSON* ParseFileJSON(char filepath[]) {
+    // open json file
+    FILE *fp = fopen(filepath, "r");
+    if (fp == NULL) {
+        printf("Error: Unable to open the file.\n");
+    }
+
+    // determine file size
+    fseek(fp, 0, SEEK_END);
+    long length = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    // allocate memory (+1 for the null terminator)
+    char *data = malloc(length + 1);
+    if (data == NULL) {
+        printf("Error: Out of memory.\n");
+        fclose(fp);
+    }
+
+    // read into dynamic buffer
+    size_t read_size = fread(data, 1, length, fp);
+    data[read_size] = '\0'; // Null-terminate the string
+    fclose(fp);
+
+    // parse JSON data
+    cJSON *json = cJSON_Parse(data);
+    if (json == NULL) {
+        const char *error_ptr = cJSON_GetErrorPtr();
+        if (error_ptr != NULL) {
+            fprintf(stderr, "Error before: %s\n", error_ptr);
+        }
+    }
+
+    free(data);
+    return json;
+}
+
 
 // RUN APP -----------------------------------------------------------------------------------------
 void HandleClayErrors(Clay_ErrorData errorData) {
@@ -40,6 +81,8 @@ void HandleClayErrors(Clay_ErrorData errorData) {
 }
 
 int main(void) {
+    cJSON *json_transactions = ParseFileJSON("resources/data/transactions.json");
+
     Clay_Raylib_Initialize(
         1280, 720, // width and height
         "Bluebell v2.0.0", // window title
