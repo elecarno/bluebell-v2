@@ -7,7 +7,8 @@
 #include <stdio.h>
 
 // GLOBALS -----------------------------------------------------------------------------------------
-const int FONT_ID_BODY_16 = 0;
+const int FONT_ID_BODY = 0;
+const int FONT_ID_MONO = 1;
 const int FONT_SIZE_BODY = 18;
 
 const Clay_Color COLOUR_WHITE          = { 245, 245, 245, 255 };
@@ -84,14 +85,28 @@ cJSON* ParseFileJSON(char filepath[]) {
     return json;
 }
 
+// DATA HANDLING -----------------------------------------------------------------------------------
+// money sum and whatnot
+
 
 // LAYOUT ------------------------------------------------------------------------------------------
-void layoutTransaction(cJSON *transaction) {
-    // GET DATA AS STRINGS
+void layoutTransaction(cJSON *transaction, cJSON *accounts, cJSON *payees) {
+    // GET DATA
+    // id
     char *id = transaction->string;
     id[5] = '\0';
-    cJSON *account = cJSON_GetObjectItem(transaction, "account");
-    cJSON *payee = cJSON_GetObjectItem(transaction, "payee");
+
+    // account
+    cJSON *account_id = cJSON_GetObjectItem(transaction, "account");
+    cJSON *account_obj = cJSON_GetObjectItem(accounts, account_id->valuestring);
+    cJSON *account_name = cJSON_GetObjectItem(account_obj, "name");
+
+    // payee
+    cJSON *payee_id = cJSON_GetObjectItem(transaction, "payee");
+    cJSON *payee_obj = cJSON_GetObjectItem(payees, payee_id->valuestring);
+    cJSON *payee_name = cJSON_GetObjectItem(payee_obj, "name");
+
+    // other
     cJSON *currency = cJSON_GetObjectItem(transaction, "currency");
     cJSON *timestamp = cJSON_GetObjectItem(transaction, "timestamp");
     cJSON *description = cJSON_GetObjectItem(transaction, "description");
@@ -110,72 +125,71 @@ void layoutTransaction(cJSON *transaction) {
             .childGap = 16
         }
     }) {
-        CLAY_AUTO_ID({
-            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.125) } }
+        CLAY_AUTO_ID({ // currency
+            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.05) } }
         }) {
             CLAY_TEXT(utilFixedClayString(currency->valuestring), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_BODY_16,
+                .fontId = FONT_ID_BODY,
                 .fontSize = FONT_SIZE_BODY,
                 .textColor = COLOUR_BLACK
             }));
         }
 
-        CLAY_AUTO_ID({
-            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.125) } }
+        CLAY_AUTO_ID({ // amount
+            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.1) } }
         }) {
-            CLAY_TEXT(utilFixedClayString(account->valuestring), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_BODY_16,
+            CLAY_TEXT(utilFixedClayString(cJSON_Print(amount)), CLAY_TEXT_CONFIG({
+                .fontId = FONT_ID_BODY,
                 .fontSize = FONT_SIZE_BODY,
                 .textColor = COLOUR_BLACK
             }));
         }
-        
 
-        CLAY_AUTO_ID({
-            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.125) } }
+        CLAY_AUTO_ID({ // account
+            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.15) } }
         }) {
-            CLAY_TEXT(utilFixedClayString(payee->valuestring), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_BODY_16,
+            CLAY_TEXT(utilFixedClayString(account_name->valuestring), CLAY_TEXT_CONFIG({
+                .fontId = FONT_ID_BODY,
+                .fontSize = FONT_SIZE_BODY,
+                .textColor = COLOUR_BLACK
+            }));
+        }
+
+        CLAY_AUTO_ID({ // payee
+            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.15) } }
+        }) {
+            CLAY_TEXT(utilFixedClayString(payee_name->valuestring), CLAY_TEXT_CONFIG({
+                .fontId = FONT_ID_BODY,
                 .fontSize = FONT_SIZE_BODY,
                 .textColor = COLOUR_BLACK
             }));
             }
 
-        CLAY_AUTO_ID({
-            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.125) } }
-        }) {
-            CLAY_TEXT(utilFixedClayString(cJSON_Print(amount)), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_BODY_16,
-                .fontSize = FONT_SIZE_BODY,
-                .textColor = COLOUR_BLACK
-            }));
-        }
-
-        CLAY_AUTO_ID({
-            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.125) } }
+        CLAY_AUTO_ID({ // tags
+            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.3) } }
         }) {
             CLAY_TEXT(utilFixedClayString(cJSON_Print(tags)), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_BODY_16,
+                .fontId = FONT_ID_BODY,
                 .fontSize = FONT_SIZE_BODY,
                 .textColor = COLOUR_BLACK
             }));
         }
 
-        CLAY_AUTO_ID({
-            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.125) } }
+        CLAY_AUTO_ID({ // timestamp
+            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.1) } }
         }) {
             CLAY_TEXT(utilFixedClayString(timestamp->valuestring), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_BODY_16,
+                .fontId = FONT_ID_BODY,
                 .fontSize = FONT_SIZE_BODY,
                 .textColor = COLOUR_BLACK
             }));
         }
 
-        CLAY_AUTO_ID({
-            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.125) } }
+        CLAY_AUTO_ID({ // id
+            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.1) } }
         }) {
             CLAY_TEXT(utilFixedClayString(id), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_BODY_16,
+                .fontId = FONT_ID_MONO,
                 .fontSize = FONT_SIZE_BODY,
                 .textColor = COLOUR_BLACK
             }));
@@ -183,13 +197,18 @@ void layoutTransaction(cJSON *transaction) {
     }
 }
 
-Clay_RenderCommandArray layoutMain(cJSON *json_transactions) {
+Clay_RenderCommandArray layoutMain(cJSON *json_data) {
+    cJSON *currencies = cJSON_GetObjectItem(json_data, "currencies");
+    cJSON *accounts = cJSON_GetObjectItem(json_data, "accounts");
+    cJSON *payees = cJSON_GetObjectItem(json_data, "payees");
+    cJSON *transactions = cJSON_GetObjectItem(json_data, "transactions");
+
     Clay_BeginLayout(); // BEGIN LAYOUT
 
     CLAY(CLAY_ID("containerMain"), {
         .backgroundColor = COLOUR_BACKGROUND,
         .layout = {
-            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
             .sizing = {
                 .width = CLAY_SIZING_GROW(),
                 .height = CLAY_SIZING_GROW()
@@ -197,6 +216,20 @@ Clay_RenderCommandArray layoutMain(cJSON *json_transactions) {
             .childGap = 8
         }
     }) {
+        CLAY(CLAY_ID("containerSidebar"), {
+            .backgroundColor = COLOUR_PANEL,
+            .layout = {
+                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                .sizing = {
+                    .width = CLAY_SIZING_PERCENT(0.3),
+                    .height = CLAY_SIZING_GROW()
+                },
+                .childGap = 2
+            }
+        }) {
+
+        }
+        
         CLAY(CLAY_ID("containerTransactions"), {
             .backgroundColor = COLOUR_PANEL,
             .layout = {
@@ -208,10 +241,10 @@ Clay_RenderCommandArray layoutMain(cJSON *json_transactions) {
                 .childGap = 2
             }
         }) {
-            int transaction_count = cJSON_GetArraySize(json_transactions);
+            int transaction_count = cJSON_GetArraySize(transactions);
             for(int i = transaction_count-1; i >= 0; i--){
-                cJSON *transaction = cJSON_GetArrayItem(json_transactions, i);
-                layoutTransaction(transaction);
+                cJSON *transaction = cJSON_GetArrayItem(transactions, i);
+                layoutTransaction(transaction, accounts, payees);
             }
         }
     }
@@ -228,7 +261,7 @@ void HandleClayErrors(Clay_ErrorData errorData) {
 }
 
 int main(void) {
-    cJSON *json_transactions = ParseFileJSON("resources/data/transactions.json");
+    cJSON *json_data = ParseFileJSON("resources/data.json");
 
     Clay_Raylib_Initialize(
         1280, 720, // width and height
@@ -250,9 +283,11 @@ int main(void) {
     }, (Clay_ErrorHandler) { HandleClayErrors });
 
     // handle fonts
-    Font fonts[1];
-    fonts[FONT_ID_BODY_16] = LoadFontEx("resources/fonts/Atkinson_Hyperlegible_Next/static/AtkinsonHyperlegibleNext-Regular.ttf", 48, 0, 400);
-    SetTextureFilter(fonts[FONT_ID_BODY_16].texture, TEXTURE_FILTER_BILINEAR);
+    Font fonts[2];
+    fonts[FONT_ID_BODY] = LoadFontEx("resources/fonts/Atkinson_Hyperlegible_Next/static/AtkinsonHyperlegibleNext-Regular.ttf", 48, 0, 400);
+    SetTextureFilter(fonts[FONT_ID_BODY].texture, TEXTURE_FILTER_BILINEAR);
+    fonts[FONT_ID_MONO] = LoadFontEx("resources/fonts/Atkinson_Hyperlegible_Mono/static/AtkinsonHyperlegibleMono-Regular.ttf", 48, 0, 400);
+    SetTextureFilter(fonts[FONT_ID_MONO].texture, TEXTURE_FILTER_BILINEAR);
     Clay_SetMeasureTextFunction(Raylib_MeasureText, fonts);
 
     // update loop (per frame)
@@ -281,7 +316,7 @@ int main(void) {
         SetMouseCursor(MOUSE_CURSOR_DEFAULT);
 
         // get layout render commands for the ui
-        Clay_RenderCommandArray renderCommands = layoutMain(json_transactions);
+        Clay_RenderCommandArray renderCommands = layoutMain(json_data);
 
         // draw the ui
         BeginDrawing();

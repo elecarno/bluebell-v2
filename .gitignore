@@ -1,3 +1,3 @@
 build/
 *.exe
-resources/data/
+resources/data.json
