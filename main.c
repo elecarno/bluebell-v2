@@ -15,11 +15,15 @@ const Clay_Color COLOUR_WHITE          = { 245, 245, 245, 255 };
 const Clay_Color COLOUR_BLACK          = { 15, 15, 15, 255 };
 const Clay_Color COLOUR_BACKGROUND     = { 36, 36, 36, 255 };
 const Clay_Color COLOUR_PANEL          = { 56, 56, 56, 255 };
-const Clay_Color COLOUR_PANEL2         = { 76, 76, 76, 255 };
+const Clay_Color COLOUR_PANEL_2         = { 76, 76, 76, 255 };
+const Clay_Color COLOUR_PANEL_3         = { 96, 96, 96, 255 };
 
-const Clay_Color COLOUR_POSITIVE       = { 142, 240, 115, 255 };
-const Clay_Color COLOUR_NEGATIVE       = { 240, 115, 115, 255 };
+const Clay_Color COLOUR_POSITIVE_LIGHT      = { 142, 240, 115, 255 };
+const Clay_Color COLOUR_POSITIVE_DARK       = { 122, 220,  95, 255 };
+const Clay_Color COLOUR_NEGATIVE_LIGHT      = { 240, 115, 115, 255 };
+const Clay_Color COLOUR_NEGATIVE_DARK       = { 220,  95,  95, 255 };
 
+cJSON *selected_transaction = NULL;
 
 // utilities
 Clay_String utilFixedClayString(char *text) {
@@ -28,24 +32,6 @@ Clay_String utilFixedClayString(char *text) {
         .chars = text
     };
 }
-
-Clay_String utilRollingClayString(const char *text) {
-    // 256 slots should be plenty for a single frame's worth of transactions
-    static char buffers[256][64]; 
-    static int currentBuffer = 0;
-
-    // Increment and wrap around
-    currentBuffer = (currentBuffer + 1) % 256;
-    
-    // Copy the text into the static slot safely
-    snprintf(buffers[currentBuffer], 64, "%s", text);
-
-    return (Clay_String) {
-        .length = (int)strlen(buffers[currentBuffer]),
-        .chars = buffers[currentBuffer]
-    };
-}
-
 
 // JSON PARSER -------------------------------------------------------------------------------------
 cJSON* ParseFileJSON(char filepath[]) {
@@ -89,6 +75,21 @@ cJSON* ParseFileJSON(char filepath[]) {
 // money sum and whatnot
 
 
+// BUTTON CALLBACKS--- -----------------------------------------------------------------------------
+void HandleTransactionInteraction(Clay_ElementId elementId, Clay_PointerData pointerData, void *userData) {
+    cJSON *transaction = (cJSON*)userData;
+    if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+        selected_transaction = transaction;
+    }
+}
+
+void HandleTransactionClose(Clay_ElementId elementId, Clay_PointerData pointerData, void *userData) {
+    if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+        selected_transaction = NULL;
+    }
+}
+
+
 // LAYOUT ------------------------------------------------------------------------------------------
 void layoutTransaction(cJSON *transaction, cJSON *accounts, cJSON *payees) {
     // GET DATA
@@ -119,7 +120,9 @@ void layoutTransaction(cJSON *transaction, cJSON *accounts, cJSON *payees) {
 
     // LAYOUT
     CLAY_AUTO_ID({
-        .backgroundColor = amount->valuedouble > 0 ? COLOUR_POSITIVE : COLOUR_NEGATIVE,
+        .backgroundColor = amount->valuedouble > 0 ? 
+        (Clay_Hovered() ? COLOUR_POSITIVE_DARK : COLOUR_POSITIVE_LIGHT) : 
+        (Clay_Hovered() ? COLOUR_NEGATIVE_DARK : COLOUR_NEGATIVE_LIGHT),
         .layout = {
             .padding = { 8, 8, 8, 8},
             .sizing = {
@@ -129,6 +132,10 @@ void layoutTransaction(cJSON *transaction, cJSON *accounts, cJSON *payees) {
             .childGap = 16
         }
     }) {
+        if (Clay_Hovered()) { SetMouseCursor(MOUSE_CURSOR_POINTING_HAND); }
+
+        Clay_OnHover(HandleTransactionInteraction, transaction);
+
         CLAY_AUTO_ID({ // currency
             .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.05) } }
         }) {
@@ -220,7 +227,7 @@ Clay_RenderCommandArray layoutMain(cJSON *json_data) {
             .childGap = 8
         }
     }) {
-        CLAY(CLAY_ID("containerSidebar"), {
+        CLAY(CLAY_ID("containerSidebar"), { // SIDEBAR
             .backgroundColor = COLOUR_PANEL,
             .layout = {
                 .layoutDirection = CLAY_TOP_TO_BOTTOM,
@@ -234,21 +241,64 @@ Clay_RenderCommandArray layoutMain(cJSON *json_data) {
 
         }
         
-        CLAY(CLAY_ID("containerTransactions"), {
-            .backgroundColor = COLOUR_PANEL,
+        CLAY(CLAY_ID("containerTransactions"), { // TRANSACTIONS CONTAINER
             .layout = {
                 .layoutDirection = CLAY_TOP_TO_BOTTOM,
                 .sizing = {
                     .width = CLAY_SIZING_PERCENT(0.7),
                     .height = CLAY_SIZING_GROW()
                 },
-                .childGap = 2
-            }
+                .childGap = 8
+            },
         }) {
-            int transaction_count = cJSON_GetArraySize(transactions);
-            for(int i = transaction_count-1; i >= 0; i--){
-                cJSON *transaction = cJSON_GetArrayItem(transactions, i);
-                layoutTransaction(transaction, accounts, payees);
+            CLAY(CLAY_ID("panelTransactionsList"), { // TRANSACTIONS LIST
+                .backgroundColor = COLOUR_PANEL,
+                .layout = {
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    .sizing = {
+                        .width = CLAY_SIZING_GROW(),
+                        .height = CLAY_SIZING_GROW()
+                    },
+                    .childGap = 2,
+                    .padding = { 8, 8, 8, 8 }
+                },
+                .clip = { .vertical = true, .childOffset = Clay_GetScrollOffset() }
+            }) {
+                int transaction_count = cJSON_GetArraySize(transactions);
+                for(int i = transaction_count-1; i >= 0; i--){
+                    cJSON *transaction = cJSON_GetArrayItem(transactions, i);
+                    layoutTransaction(transaction, accounts, payees);
+                }
+            }
+            
+            if (selected_transaction != NULL) { // SELECTED TRANSACTION INFO
+                CLAY(CLAY_ID("panelTransactionSelected"), { 
+                    .backgroundColor = COLOUR_PANEL,
+                    .layout = {
+                        .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                        .sizing = {
+                            .width = CLAY_SIZING_GROW(),
+                            .height = CLAY_SIZING_PERCENT(0.1)
+                        },
+                        .childGap = 2,
+                        .padding = { 8, 8, 8, 8 }
+                    },
+                }) {
+                    CLAY(CLAY_ID("buttonCloseTransaction"), {
+                        .layout = { .padding = { 16, 16, 8, 8 }},
+                        .backgroundColor = Clay_Hovered() ? COLOUR_PANEL_3 : COLOUR_PANEL_2,
+                    }) {
+                        if (Clay_Hovered()) { SetMouseCursor(MOUSE_CURSOR_POINTING_HAND); }
+
+                        Clay_OnHover(HandleTransactionClose, NULL);
+
+                        CLAY_TEXT(CLAY_STRING("Close"), CLAY_TEXT_CONFIG({
+                            .fontId = FONT_ID_BODY,
+                            .fontSize = FONT_SIZE_BODY,
+                            .textColor = COLOUR_WHITE
+                        }));
+                    }
+                }
             }
         }
     }
@@ -312,8 +362,8 @@ int main(void) {
             IsMouseButtonDown(0)
         );
         Clay_UpdateScrollContainers(
-            true,
-            (Clay_Vector2) { scrollDelta.x, scrollDelta.y },
+            false,
+            (Clay_Vector2) { scrollDelta.x * 4, scrollDelta.y * 4 },
             GetFrameTime()
         );
 
