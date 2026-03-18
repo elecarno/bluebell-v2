@@ -8,8 +8,10 @@
 
 // GLOBALS -----------------------------------------------------------------------------------------
 const int FONT_ID_BODY = 0;
-const int FONT_ID_MONO = 1;
+const int FONT_ID_BODY_BOLD = 1;
+const int FONT_ID_MONO = 2;
 const int FONT_SIZE_BODY = 18;
+const int FONT_SIZE_TITLE = 22;
 
 const Clay_Color COLOUR_WHITE          = { 245, 245, 245, 255 };
 const Clay_Color COLOUR_BLACK          = { 15, 15, 15, 255 };
@@ -72,7 +74,23 @@ cJSON* ParseFileJSON(char filepath[]) {
 }
 
 // DATA HANDLING -----------------------------------------------------------------------------------
-// money sum and whatnot
+double GetBalanceTotal(cJSON *transactions, cJSON *currencies) {
+    double balance_total = 0;
+
+    int transaction_count = cJSON_GetArraySize(transactions);
+    for(int i = transaction_count-1; i >= 0; i--){
+        cJSON *transaction = cJSON_GetArrayItem(transactions, i);
+        cJSON *amount = cJSON_GetObjectItem(transaction, "amount");
+        cJSON *currency = cJSON_GetObjectItem(transaction, "currency");
+
+        cJSON *rates = cJSON_GetObjectItem(currencies, "rates");
+        cJSON *factor = cJSON_GetObjectItem(rates, currency->valuestring);
+
+        balance_total += (amount->valuedouble)*(factor->valuedouble);
+    }
+
+    return balance_total;
+}
 
 
 // BUTTON CALLBACKS--- -----------------------------------------------------------------------------
@@ -124,7 +142,7 @@ void layoutTransaction(cJSON *transaction, cJSON *accounts, cJSON *payees) {
         (Clay_Hovered() ? COLOUR_POSITIVE_DARK : COLOUR_POSITIVE_LIGHT) : 
         (Clay_Hovered() ? COLOUR_NEGATIVE_DARK : COLOUR_NEGATIVE_LIGHT),
         .layout = {
-            .padding = { 8, 8, 8, 8},
+            .padding = { 16, 16, 8, 8 },
             .sizing = {
                 .width = CLAY_SIZING_GROW(),
                 .height = CLAY_SIZING_FIXED(32)
@@ -136,74 +154,33 @@ void layoutTransaction(cJSON *transaction, cJSON *accounts, cJSON *payees) {
 
         Clay_OnHover(HandleTransactionInteraction, transaction);
 
-        CLAY_AUTO_ID({ // currency
-            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.05) } }
-        }) {
-            CLAY_TEXT(utilFixedClayString(currency->valuestring), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_MONO,
-                .fontSize = FONT_SIZE_BODY,
-                .textColor = COLOUR_BLACK
-            }));
+        // currency
+        CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.05) } } }) {
+            CLAY_TEXT(utilFixedClayString(currency->valuestring), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_BLACK }));
         }
-
-        CLAY_AUTO_ID({ // amount
-            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.1) } }
-        }) {
-            CLAY_TEXT(utilFixedClayString(cJSON_Print(&amount_abs)), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_MONO,
-                .fontSize = FONT_SIZE_BODY,
-                .textColor = COLOUR_BLACK
-            }));
+        // amount
+        CLAY_AUTO_ID({  .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.1) } } }) {
+            CLAY_TEXT(utilFixedClayString(cJSON_Print(&amount_abs)), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_BLACK }));
         }
-
-        CLAY_AUTO_ID({ // account
-            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.15) } }
-        }) {
-            CLAY_TEXT(utilFixedClayString(account_name->valuestring), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_BODY,
-                .fontSize = FONT_SIZE_BODY,
-                .textColor = COLOUR_BLACK
-            }));
+        // account
+        CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.15) } } }) {
+            CLAY_TEXT(utilFixedClayString(account_name->valuestring), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_BODY, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_BLACK }));
         }
-
-        CLAY_AUTO_ID({ // payee
-            .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.15) } }
-        }) {
-            CLAY_TEXT(utilFixedClayString(payee_name->valuestring), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_BODY,
-                .fontSize = FONT_SIZE_BODY,
-                .textColor = COLOUR_BLACK
-            }));
-            }
-
-        CLAY_AUTO_ID({ // tags
-            .layout = { .sizing = { .width = CLAY_SIZING_GROW() } }
-        }) {
-            CLAY_TEXT(utilFixedClayString(cJSON_Print(tags)), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_BODY,
-                .fontSize = FONT_SIZE_BODY,
-                .textColor = COLOUR_BLACK
-            }));
+        // payee
+        CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.15) } } }) {
+            CLAY_TEXT(utilFixedClayString(payee_name->valuestring), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_BODY, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_BLACK }));
         }
-
-        CLAY_AUTO_ID({ // timestamp
-            .layout = { .sizing = { .width = CLAY_SIZING_FIXED(100) } }
-        }) {
-            CLAY_TEXT(utilFixedClayString(timestamp->valuestring), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_MONO,
-                .fontSize = FONT_SIZE_BODY,
-                .textColor = COLOUR_BLACK
-            }));
+        // tags
+        CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_GROW() } } }) {
+            CLAY_TEXT(utilFixedClayString(cJSON_Print(tags)), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_BODY, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_BLACK }));
         }
-
-        CLAY_AUTO_ID({ // id
-            .layout = { .sizing = { .width = CLAY_SIZING_FIXED(60) } }
-        }) {
-            CLAY_TEXT(utilFixedClayString(id), CLAY_TEXT_CONFIG({
-                .fontId = FONT_ID_MONO,
-                .fontSize = FONT_SIZE_BODY,
-                .textColor = COLOUR_BLACK
-            }));
+        // timestamp
+        CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_FIXED(100) } } }) {
+            CLAY_TEXT(utilFixedClayString(timestamp->valuestring), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_BLACK }));
+        }
+        // id
+        CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_FIXED(60) } } }) {
+            CLAY_TEXT(utilFixedClayString(id), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_BLACK }));
         }
     }
 }
@@ -228,17 +205,71 @@ Clay_RenderCommandArray layoutMain(cJSON *json_data) {
         }
     }) {
         CLAY(CLAY_ID("containerSidebar"), { // SIDEBAR
-            .backgroundColor = COLOUR_PANEL,
             .layout = {
                 .layoutDirection = CLAY_TOP_TO_BOTTOM,
                 .sizing = {
                     .width = CLAY_SIZING_PERCENT(0.3),
                     .height = CLAY_SIZING_GROW()
                 },
-                .childGap = 2
+                .childGap = 4
             }
         }) {
+            CLAY(CLAY_ID("panelStats"), { // SETTINGS
+                .backgroundColor = COLOUR_PANEL,
+                .layout = {
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    .sizing = {
+                        .width = CLAY_SIZING_GROW(),
+                        .height = CLAY_SIZING_PERCENT(0.1)
+                    },
+                    .padding = { 8, 8, 8, 8 },
+                    .childGap = 4
+                }
+            }) {
+                
+            }
 
+            CLAY(CLAY_ID("panelPicker"), { // STATS
+                .backgroundColor = COLOUR_PANEL,
+                .layout = {
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    .sizing = {
+                        .width = CLAY_SIZING_GROW(),
+                        .height = CLAY_SIZING_PERCENT(0.3)
+                    },
+                    .padding = { 8, 8, 8, 8 },
+                    .childGap = 4
+                }
+            }) { 
+                CLAY(CLAY_ID("labelBalanceTotal")) {
+                    double balance_total = GetBalanceTotal(transactions, currencies);
+                    char balance_str[128];
+                    cJSON *base = cJSON_GetObjectItem(currencies, "base");
+                    snprintf(balance_str, sizeof(balance_str), "%.2f %s", balance_total, base->valuestring);
+
+                    CLAY(CLAY_ID("textBalanceTotal")) {
+                        CLAY_TEXT(CLAY_STRING("Total: "), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_BODY, .fontSize = FONT_SIZE_TITLE, .textColor = COLOUR_WHITE }));
+                    }
+                    CLAY(CLAY_ID("valueBalanceTotal")) {
+                        CLAY_TEXT(utilFixedClayString(balance_str), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_TITLE, .textColor = COLOUR_WHITE }));
+                    }
+                }
+            }
+
+            CLAY(CLAY_ID("panelSettings"), { // PICKER
+                .backgroundColor = COLOUR_PANEL,
+                .layout = {
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    .sizing = {
+                        .width = CLAY_SIZING_GROW(),
+                        .height = CLAY_SIZING_GROW()
+                    },
+                    .padding = { 8, 8, 8, 8 },
+                    .childGap = 4
+                }
+            }) {
+                
+            }
         }
         
         CLAY(CLAY_ID("containerTransactions"), { // TRANSACTIONS CONTAINER
@@ -248,9 +279,24 @@ Clay_RenderCommandArray layoutMain(cJSON *json_data) {
                     .width = CLAY_SIZING_PERCENT(0.7),
                     .height = CLAY_SIZING_GROW()
                 },
-                .childGap = 8
+                .childGap = 4
             },
         }) {
+            CLAY(CLAY_ID("panelTransactionAdd"), { // ADD TRANSACTION
+                .backgroundColor = COLOUR_PANEL,
+                .layout = {
+                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                    .sizing = {
+                        .width = CLAY_SIZING_GROW(),
+                        .height = CLAY_SIZING_PERCENT(0.1)
+                    },
+                    .childGap = 2,
+                    .padding = { 8, 8, 8, 8 }
+                },
+            }) {
+                
+            }
+
             CLAY(CLAY_ID("panelTransactionsList"), { // TRANSACTIONS LIST
                 .backgroundColor = COLOUR_PANEL,
                 .layout = {
@@ -259,15 +305,59 @@ Clay_RenderCommandArray layoutMain(cJSON *json_data) {
                         .width = CLAY_SIZING_GROW(),
                         .height = CLAY_SIZING_GROW()
                     },
-                    .childGap = 2,
+                    .childGap = 4,
                     .padding = { 8, 8, 8, 8 }
                 },
-                .clip = { .vertical = true, .childOffset = Clay_GetScrollOffset() }
             }) {
-                int transaction_count = cJSON_GetArraySize(transactions);
-                for(int i = transaction_count-1; i >= 0; i--){
-                    cJSON *transaction = cJSON_GetArrayItem(transactions, i);
-                    layoutTransaction(transaction, accounts, payees);
+                
+                CLAY(CLAY_ID("containerTransactionsHeader"), {
+                    .layout = {
+                        .sizing = {
+                            .width = CLAY_SIZING_GROW(),
+                            .height = CLAY_SIZING_GROW()
+                        },
+                        .padding = { 16, 16, 8, 8 }
+                    }
+                }) {
+                    CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.07) } } }) {
+                        CLAY_TEXT(CLAY_STRING("cur"), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_WHITE }));
+                    }
+                    CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.1) } } }) {
+                        CLAY_TEXT(CLAY_STRING("Amount"), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_WHITE }));
+                    }
+                    CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.15) } } }) {
+                        CLAY_TEXT(CLAY_STRING("Account"), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_WHITE }));
+                    }
+                    CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_PERCENT(0.15) } } }) {
+                        CLAY_TEXT(CLAY_STRING("Payee"), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_WHITE }));
+                    }
+                    CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_GROW() } } }) {
+                        CLAY_TEXT(CLAY_STRING("Tags"), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_WHITE }));
+                    }
+                    CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_FIXED(100) } } }) {
+                        CLAY_TEXT(CLAY_STRING("Date"), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_WHITE }));
+                    }
+                    CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_FIXED(60) } } }) {
+                        CLAY_TEXT(CLAY_STRING("id"), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_WHITE }));
+                    }
+                }
+
+                CLAY(CLAY_ID("containerTransactionsList"), {
+                    .layout = {
+                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                        .sizing = {
+                            .width = CLAY_SIZING_GROW(),
+                            .height = CLAY_SIZING_GROW()
+                        },
+                        .childGap = 2,
+                    },
+                    .clip = { .vertical = true, .childOffset = Clay_GetScrollOffset() }
+                }) {
+                    int transaction_count = cJSON_GetArraySize(transactions);
+                    for(int i = transaction_count-1; i >= 0; i--){
+                        cJSON *transaction = cJSON_GetArrayItem(transactions, i);
+                        layoutTransaction(transaction, accounts, payees);
+                    }
                 }
             }
             
@@ -340,6 +430,8 @@ int main(void) {
     Font fonts[2];
     fonts[FONT_ID_BODY] = LoadFontEx("resources/fonts/Atkinson_Hyperlegible_Next/static/AtkinsonHyperlegibleNext-Regular.ttf", 48, 0, 400);
     SetTextureFilter(fonts[FONT_ID_BODY].texture, TEXTURE_FILTER_BILINEAR);
+    fonts[FONT_ID_BODY_BOLD] = LoadFontEx("resources/fonts/Atkinson_Hyperlegible_Next/static/AtkinsonHyperlegibleNext-Bold.ttf", 48, 0, 400);
+    SetTextureFilter(fonts[FONT_ID_BODY_BOLD].texture, TEXTURE_FILTER_BILINEAR);
     fonts[FONT_ID_MONO] = LoadFontEx("resources/fonts/Atkinson_Hyperlegible_Mono/static/AtkinsonHyperlegibleMono-Regular.ttf", 48, 0, 400);
     SetTextureFilter(fonts[FONT_ID_MONO].texture, TEXTURE_FILTER_BILINEAR);
     Clay_SetMeasureTextFunction(Raylib_MeasureText, fonts);
