@@ -7,25 +7,31 @@
 #include <stdio.h>
 
 // GLOBALS -----------------------------------------------------------------------------------------
-const int FONT_ID_BODY = 0;
+const int FONT_ID_BODY      = 0;
 const int FONT_ID_BODY_BOLD = 1;
-const int FONT_ID_MONO = 2;
-const int FONT_SIZE_BODY = 18;
-const int FONT_SIZE_TITLE = 22;
+const int FONT_ID_MONO      = 2;
+const int FONT_SIZE_BODY    = 18;
+const int FONT_SIZE_TITLE   = 22;
 
 const Clay_Color COLOUR_WHITE          = { 245, 245, 245, 255 };
 const Clay_Color COLOUR_BLACK          = { 15, 15, 15, 255 };
 const Clay_Color COLOUR_BACKGROUND     = { 36, 36, 36, 255 };
 const Clay_Color COLOUR_PANEL          = { 56, 56, 56, 255 };
-const Clay_Color COLOUR_PANEL_2         = { 76, 76, 76, 255 };
-const Clay_Color COLOUR_PANEL_3         = { 96, 96, 96, 255 };
+const Clay_Color COLOUR_PANEL_2        = { 76, 76, 76, 255 };
+const Clay_Color COLOUR_PANEL_3        = { 96, 96, 96, 255 };
+const Clay_Color COLOUR_PANEL_4        = { 116, 116, 116, 255 };
 
 const Clay_Color COLOUR_POSITIVE_LIGHT      = { 142, 240, 115, 255 };
 const Clay_Color COLOUR_POSITIVE_DARK       = { 122, 220,  95, 255 };
 const Clay_Color COLOUR_NEGATIVE_LIGHT      = { 240, 115, 115, 255 };
 const Clay_Color COLOUR_NEGATIVE_DARK       = { 220,  95,  95, 255 };
 
+
+// STATE -------------------------------------------------------------------------------------------#
 cJSON *selected_transaction = NULL;
+cJSON *selected_account     = NULL;
+cJSON *selected_payee       = NULL;
+
 
 // utilities
 Clay_String utilFixedClayString(char *text) {
@@ -101,6 +107,20 @@ void HandleTransactionInteraction(Clay_ElementId elementId, Clay_PointerData poi
     }
 }
 
+void HandlePayeeSet(Clay_ElementId elementId, Clay_PointerData pointerData, void *userData) {
+    cJSON *payee = (cJSON*)payee;
+    if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+        selected_payee = payee;
+    }
+}
+
+void HandleAccountSet(Clay_ElementId elementId, Clay_PointerData pointerData, void *userData) {
+    cJSON *account = (cJSON*)account;
+    if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+        selected_account = account;
+    }
+}
+
 void HandleTransactionClose(Clay_ElementId elementId, Clay_PointerData pointerData, void *userData) {
     if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
         selected_transaction = NULL;
@@ -108,7 +128,7 @@ void HandleTransactionClose(Clay_ElementId elementId, Clay_PointerData pointerDa
 }
 
 
-// LAYOUT ------------------------------------------------------------------------------------------
+// LAYOUTS -----------------------------------------------------------------------------------------
 void layoutTransaction(cJSON *transaction, cJSON *accounts, cJSON *payees) {
     // GET DATA
     // id
@@ -185,10 +205,51 @@ void layoutTransaction(cJSON *transaction, cJSON *accounts, cJSON *payees) {
     }
 }
 
+void layoutAccount(cJSON *account) {
+    cJSON *account_name = cJSON_GetObjectItem(account, "name");
+
+    CLAY_AUTO_ID({  
+        .backgroundColor = Clay_Hovered() ? COLOUR_PANEL_3 : COLOUR_PANEL_2,
+        .layout = {
+            .sizing = { 
+                .width = CLAY_SIZING_GROW(),
+                .height = CLAY_SIZING_FIXED(32)
+            },
+            .padding = { 8, 8, 8, 8 },
+            .childGap = 8
+        }
+    }) {
+        if (Clay_Hovered()) { SetMouseCursor(MOUSE_CURSOR_POINTING_HAND); }
+        Clay_OnHover(HandleAccountSet, account);
+        CLAY_TEXT(utilFixedClayString(account_name->valuestring), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_BODY, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_WHITE }));
+    }
+}
+
+void layoutPayee(cJSON *payee) {
+    cJSON *payee_name = cJSON_GetObjectItem(payee, "name");
+
+    CLAY_AUTO_ID({  
+        .backgroundColor = Clay_Hovered() ? COLOUR_PANEL_3 : COLOUR_PANEL_2,
+        .layout = {
+            .sizing = { 
+                .width = CLAY_SIZING_GROW(),
+                .height = CLAY_SIZING_FIXED(32)
+            },
+            .padding = { 8, 8, 8, 8 },
+            .childGap = 8
+        }
+    }) {
+        if (Clay_Hovered()) { SetMouseCursor(MOUSE_CURSOR_POINTING_HAND); }
+        Clay_OnHover(HandlePayeeSet, payee);
+        CLAY_TEXT(utilFixedClayString(payee_name->valuestring), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_BODY, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_WHITE }));
+    }
+}
+
+
 Clay_RenderCommandArray layoutMain(cJSON *json_data) {
-    cJSON *currencies = cJSON_GetObjectItem(json_data, "currencies");
-    cJSON *accounts = cJSON_GetObjectItem(json_data, "accounts");
-    cJSON *payees = cJSON_GetObjectItem(json_data, "payees");
+    cJSON *currencies   = cJSON_GetObjectItem(json_data, "currencies");
+    cJSON *accounts     = cJSON_GetObjectItem(json_data, "accounts");
+    cJSON *payees       = cJSON_GetObjectItem(json_data, "payees");
     cJSON *transactions = cJSON_GetObjectItem(json_data, "transactions");
 
     Clay_BeginLayout(); // BEGIN LAYOUT
@@ -211,16 +272,16 @@ Clay_RenderCommandArray layoutMain(cJSON *json_data) {
                     .width = CLAY_SIZING_PERCENT(0.3),
                     .height = CLAY_SIZING_GROW()
                 },
-                .childGap = 4
+                .childGap = 8
             }
         }) {
-            CLAY(CLAY_ID("panelStats"), { // SETTINGS
+            CLAY(CLAY_ID("panelSettings"), { // SETTINGS
                 .backgroundColor = COLOUR_PANEL,
                 .layout = {
                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
                     .sizing = {
                         .width = CLAY_SIZING_GROW(),
-                        .height = CLAY_SIZING_PERCENT(0.1)
+                        .height = CLAY_SIZING_PERCENT(0.05)
                     },
                     .padding = { 8, 8, 8, 8 },
                     .childGap = 4
@@ -229,7 +290,7 @@ Clay_RenderCommandArray layoutMain(cJSON *json_data) {
                 
             }
 
-            CLAY(CLAY_ID("panelPicker"), { // STATS
+            CLAY(CLAY_ID("panelStats"), { // STATS
                 .backgroundColor = COLOUR_PANEL,
                 .layout = {
                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
@@ -256,19 +317,110 @@ Clay_RenderCommandArray layoutMain(cJSON *json_data) {
                 }
             }
 
-            CLAY(CLAY_ID("panelSettings"), { // PICKER
-                .backgroundColor = COLOUR_PANEL,
+            CLAY(CLAY_ID("containerPickers"), { // PICKERS
                 .layout = {
-                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
                     .sizing = {
                         .width = CLAY_SIZING_GROW(),
                         .height = CLAY_SIZING_GROW()
                     },
-                    .padding = { 8, 8, 8, 8 },
                     .childGap = 4
                 }
             }) {
-                
+                CLAY(CLAY_ID("containerAccountPicker"), { // ACCOUNT PICKER
+                    .layout = {
+                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                        .sizing = { .width = CLAY_SIZING_GROW(), .height = CLAY_SIZING_GROW() },
+                        .childGap = 4,
+                    },
+                }) {
+
+                    CLAY(CLAY_ID("panelAccountList"), { // ACCOUNT LIST
+                        .backgroundColor = COLOUR_PANEL,
+                        .layout = {
+                            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                            .sizing = {
+                                .width = CLAY_SIZING_GROW(),
+                                .height = CLAY_SIZING_GROW()
+                            },
+                            .padding = { 8, 8, 8, 8 },
+                            .childGap = 2,
+                        },
+                        .clip = { .vertical = true, .childOffset = Clay_GetScrollOffset() }
+                    }) {
+                        int account_count = cJSON_GetArraySize(accounts);
+                        for(int i = 0; i < account_count; i++){
+                            cJSON *account = cJSON_GetArrayItem(accounts, i);
+                            layoutAccount(account);
+                        }
+                    }
+
+                    if (selected_account != NULL) { // ACCOUNT EDIT
+                        CLAY(CLAY_ID("panelAccountEdit"), {
+                            .backgroundColor = COLOUR_PANEL,
+                            .layout = {
+                                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                .sizing = {
+                                    .width = CLAY_SIZING_GROW(),
+                                    .height = CLAY_SIZING_PERCENT(0.1)
+                                },
+                                .padding = { 8, 8, 8, 8 },
+                                .childGap = 2,
+                            },
+                        }) {
+                            // name edit
+                            // total amount in base currency
+                            // totals in each currency
+                        }
+                    }
+                }
+
+                CLAY(CLAY_ID("containerPayeePicker"), { // PAYEE PICKER
+                    .layout = {
+                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                        .sizing = { .width = CLAY_SIZING_GROW(), .height = CLAY_SIZING_GROW() },
+                        .childGap = 4,
+                    },
+                }) {
+
+                    CLAY(CLAY_ID("panelPayeeList"), { // PAYEE LIST
+                        .backgroundColor = COLOUR_PANEL,
+                        .layout = {
+                            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                            .sizing = {
+                                .width = CLAY_SIZING_GROW(),
+                                .height = CLAY_SIZING_GROW()
+                            },
+                            .padding = { 8, 8, 8, 8 },
+                            .childGap = 2,
+                        },
+                        .clip = { .vertical = true, .childOffset = Clay_GetScrollOffset() }
+                    }) {
+                        int payee_count = cJSON_GetArraySize(payees);
+                        for(int i = 0; i < payee_count; i++){
+                            cJSON *payee = cJSON_GetArrayItem(payees, i);
+                            layoutPayee(payee);
+                        }
+                    }
+
+                    if (selected_payee != NULL) { // PAYEE EDIT
+                        CLAY(CLAY_ID("panelPayeeEdit"), {
+                            .backgroundColor = COLOUR_PANEL,
+                            .layout = {
+                                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                .sizing = {
+                                    .width = CLAY_SIZING_GROW(),
+                                    .height = CLAY_SIZING_PERCENT(0.1)
+                                },
+                                .padding = { 8, 8, 8, 8 },
+                                .childGap = 2,
+                            },
+                        }) {
+                            // name edit
+                            // amount sent to
+                            // amount recieved from
+                        }
+                    }
+                }
             }
         }
         
@@ -309,7 +461,6 @@ Clay_RenderCommandArray layoutMain(cJSON *json_data) {
                     .padding = { 8, 8, 8, 8 }
                 },
             }) {
-                
                 CLAY(CLAY_ID("containerTransactionsHeader"), {
                     .layout = {
                         .sizing = {
@@ -427,7 +578,7 @@ int main(void) {
     }, (Clay_ErrorHandler) { HandleClayErrors });
 
     // handle fonts
-    Font fonts[2];
+    Font fonts[3];
     fonts[FONT_ID_BODY] = LoadFontEx("resources/fonts/Atkinson_Hyperlegible_Next/static/AtkinsonHyperlegibleNext-Regular.ttf", 48, 0, 400);
     SetTextureFilter(fonts[FONT_ID_BODY].texture, TEXTURE_FILTER_BILINEAR);
     fonts[FONT_ID_BODY_BOLD] = LoadFontEx("resources/fonts/Atkinson_Hyperlegible_Next/static/AtkinsonHyperlegibleNext-Bold.ttf", 48, 0, 400);
