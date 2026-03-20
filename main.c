@@ -41,6 +41,7 @@ Clay_String utilFixedClayString(char *text) {
     };
 }
 
+
 // JSON PARSER -------------------------------------------------------------------------------------
 cJSON* ParseFileJSON(char filepath[]) {
     // open json file
@@ -98,26 +99,45 @@ double GetBalanceTotal(cJSON *transactions, cJSON *currencies) {
     return balance_total;
 }
 
+double GetAccountBalanceTotal(cJSON *transactions, cJSON *currencies, cJSON *account) {
+    double account_balance_total = 0;
+
+    int transaction_count = cJSON_GetArraySize(transactions);
+    for(int i = transaction_count-1; i >= 0; i--){
+        cJSON *transaction = cJSON_GetArrayItem(transactions, i);
+        cJSON *transaction_account = cJSON_GetObjectItem(transaction, "account");
+
+        if (strcmp(transaction_account->valuestring, account->string) == 0) {
+
+            cJSON *amount = cJSON_GetObjectItem(transaction, "amount");
+            cJSON *currency = cJSON_GetObjectItem(transaction, "currency");
+
+            cJSON *rates = cJSON_GetObjectItem(currencies, "rates");
+            cJSON *factor = cJSON_GetObjectItem(rates, currency->valuestring);
+
+            account_balance_total += (amount->valuedouble)*(factor->valuedouble);
+        }
+    }
+
+    return account_balance_total;
+}
 
 // BUTTON CALLBACKS--- -----------------------------------------------------------------------------
 void HandleTransactionInteraction(Clay_ElementId elementId, Clay_PointerData pointerData, void *userData) {
-    cJSON *transaction = (cJSON*)userData;
     if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
-        selected_transaction = transaction;
+        selected_transaction = (cJSON*)userData;;
     }
 }
 
 void HandlePayeeSet(Clay_ElementId elementId, Clay_PointerData pointerData, void *userData) {
-    cJSON *payee = (cJSON*)payee;
     if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
-        selected_payee = payee;
+        selected_payee = (cJSON*)userData;;
     }
 }
 
 void HandleAccountSet(Clay_ElementId elementId, Clay_PointerData pointerData, void *userData) {
-    cJSON *account = (cJSON*)account;
     if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
-        selected_account = account;
+        selected_account = (cJSON*)userData;;
     }
 }
 
@@ -148,7 +168,7 @@ void layoutTransaction(cJSON *transaction, cJSON *accounts, cJSON *payees) {
     // amount
     cJSON *amount = cJSON_GetObjectItem(transaction, "amount");
     cJSON amount_abs = *amount;
-    cJSON_SetNumberValue(&amount_abs, abs(amount->valuedouble));
+    cJSON_SetNumberValue(&amount_abs, fabs(amount->valuedouble));
 
     // other
     cJSON *currency = cJSON_GetObjectItem(transaction, "currency");
@@ -301,19 +321,15 @@ Clay_RenderCommandArray layoutMain(cJSON *json_data) {
                     .padding = { 8, 8, 8, 8 },
                     .childGap = 4
                 }
-            }) { 
+            }) {
                 CLAY(CLAY_ID("labelBalanceTotal")) {
+                    static char balance_str[128];
                     double balance_total = GetBalanceTotal(transactions, currencies);
-                    char balance_str[128];
                     cJSON *base = cJSON_GetObjectItem(currencies, "base");
                     snprintf(balance_str, sizeof(balance_str), "%.2f %s", balance_total, base->valuestring);
 
-                    CLAY(CLAY_ID("textBalanceTotal")) {
-                        CLAY_TEXT(CLAY_STRING("Total: "), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_BODY, .fontSize = FONT_SIZE_TITLE, .textColor = COLOUR_WHITE }));
-                    }
-                    CLAY(CLAY_ID("valueBalanceTotal")) {
-                        CLAY_TEXT(utilFixedClayString(balance_str), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_TITLE, .textColor = COLOUR_WHITE }));
-                    }
+                    CLAY_TEXT(CLAY_STRING("Total: "), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_BODY, .fontSize = FONT_SIZE_TITLE, .textColor = COLOUR_WHITE }));
+                    CLAY_TEXT(utilFixedClayString(balance_str), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_TITLE, .textColor = COLOUR_WHITE }));
                 }
             }
 
@@ -361,14 +377,25 @@ Clay_RenderCommandArray layoutMain(cJSON *json_data) {
                                 .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                 .sizing = {
                                     .width = CLAY_SIZING_GROW(),
-                                    .height = CLAY_SIZING_PERCENT(0.1)
+                                    .height = CLAY_SIZING_PERCENT(0.2)
                                 },
                                 .padding = { 8, 8, 8, 8 },
                                 .childGap = 2,
                             },
                         }) {
-                            // name edit
-                            // total amount in base currency
+                            cJSON *account_name = cJSON_GetObjectItem(selected_account, "name");
+
+                            CLAY_TEXT(utilFixedClayString(account_name->valuestring), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_BODY, .fontSize = FONT_SIZE_TITLE, .textColor = COLOUR_WHITE }));
+                            
+                            static char balance_str[128];
+                            double balance_total = GetAccountBalanceTotal(transactions, currencies, selected_account);
+                            cJSON *base = cJSON_GetObjectItem(currencies, "base");
+                            snprintf(balance_str, sizeof(balance_str), "%.2f %s", balance_total, base->valuestring);
+
+                            CLAY_AUTO_ID() {
+                                CLAY_TEXT(CLAY_STRING("Total: "), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_BODY, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_WHITE }));
+                                CLAY_TEXT(utilFixedClayString(balance_str), CLAY_TEXT_CONFIG({ .fontId = FONT_ID_MONO, .fontSize = FONT_SIZE_BODY, .textColor = COLOUR_WHITE }));
+                            }
                             // totals in each currency
                         }
                     }
@@ -409,7 +436,7 @@ Clay_RenderCommandArray layoutMain(cJSON *json_data) {
                                 .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                 .sizing = {
                                     .width = CLAY_SIZING_GROW(),
-                                    .height = CLAY_SIZING_PERCENT(0.1)
+                                    .height = CLAY_SIZING_PERCENT(0.2)
                                 },
                                 .padding = { 8, 8, 8, 8 },
                                 .childGap = 2,
@@ -565,7 +592,7 @@ int main(void) {
     );
 
     // get memory allocation
-    uint64_t clayRequiredMemory = Clay_MinMemorySize();
+    uint64_t clayRequiredMemory = Clay_MinMemorySize() * 4;
     Clay_Arena clayMemory = Clay_CreateArenaWithCapacityAndMemory(
         clayRequiredMemory, 
         malloc(clayRequiredMemory)
